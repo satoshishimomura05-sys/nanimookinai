@@ -55,27 +55,7 @@ export async function GET() {
         max_tokens: 2000,
         messages: [{
           role: 'user',
-          content: `以下は今日の実際のNHKニュース一覧です。この中から穏やかで明るい話題を最大8本選んでください。
-
-選定基準：
-- 災害・事故・犯罪・政治対立・戦争などネガティブなものは除外
-- 科学・自然・動物・文化・地域の取り組みなどを優先
-
-ニュース一覧：
-${newsText}
-
-必ずこのJSON形式のみで返してください：
-[
-  {
-    "id": "1",
-    "title": "元のタイトルそのまま",
-    "summary": "80文字以内の要約",
-    "category": "自然/動物/人・地域/科学/文化/食 のどれか",
-    "emoji": "絵文字1文字",
-    "url": "元記事のURL",
-    "likes": 0
-  }
-]`
+         content: `Return ONLY a JSON array, no other text. Select up to 8 positive/calm news from this list and return as JSON:\n\n${newsText}\n\nJSON format:\n[{"id":"1","title":"タイトル","summary":"要約80文字以内","category":"自然","emoji":"🌸","url":"URL","likes":0}]`,
         }]
       })
     })
