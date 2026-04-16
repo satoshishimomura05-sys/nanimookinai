@@ -50,7 +50,11 @@ function ArticleCard({ article, onLike }) {
         }}>{article.category}</span>
       </div>
       <h2 style={{ fontSize: 15, fontWeight: 500, lineHeight: 1.5, color: '#1a1a1a' }}>
-        {article.title}
+        {article.url ? (
+          <a href={article.url} target="_blank" rel="noopener noreferrer" style={{ color: '#1a1a1a' }}>
+            {article.title}
+          </a>
+        ) : article.title}
       </h2>
       <p style={{ fontSize: 13, color: '#666', lineHeight: 1.6 }}>
         {article.summary}
