@@ -87,8 +87,7 @@ ${newsText}
     }
 
     const text = apiData.content[0].text
-    const clean = text.replace(/```json|```/g, '').trim()
-    const articles = JSON.parse(clean)
+const articles = JSON.parse(text.match(/\[[\s\S]*\]/)[0])
 
     return Response.json({ articles, updatedAt: new Date().toISOString() })
 
