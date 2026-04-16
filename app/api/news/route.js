@@ -87,7 +87,9 @@ ${newsText}
     }
 
     const text = apiData.content[0].text
-const articles = JSON.parse(text.match(/\[[\s\S]*\]/)[0])
+const jsonStr = text.match(/\[[\s\S]*?\](?=\s*$)/)?.[0] || text.match(/\[[\s\S]*\]/)?.[0]
+if (!jsonStr) throw new Error('No JSON found')
+const articles = JSON.parse(jsonStr)
 
     return Response.json({ articles, updatedAt: new Date().toISOString() })
 
