@@ -1,4 +1,4 @@
-export const revalidate = 3600 // 1時間キャッシュ
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
@@ -37,8 +37,7 @@ export async function GET() {
           }
         ]
       }),
-      next: { revalidate: 3600 }
-    })
+      })
 
     const data = await response.json()
     const text = data.content[0].text
