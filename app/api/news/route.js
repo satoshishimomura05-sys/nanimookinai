@@ -18,7 +18,7 @@ const firstTitle = text.match(/<item>[\s\S]*?<title>(.*?)<\/title>/)?.[1] ?? nul
       length: text.length,
       itemCount,
       firstTitle,
-      preview: text.slice(0, 2000),
+      preview: text.slice(0, 200),
     })
   } catch (e) {
     return Response.json({ error: e.message })
