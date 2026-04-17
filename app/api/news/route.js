@@ -11,7 +11,7 @@ export async function GET() {
     const status = rssRes.status
     const text = await rssRes.text()
     const itemCount = (text.match(/<item>/g) || []).length
-    const firstTitle = text.match(/<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ?? null
+const firstTitle = text.match(/<item>[\s\S]*?<title>(.*?)<\/title>/)?.[1] ?? null
 
     return Response.json({
       status,
