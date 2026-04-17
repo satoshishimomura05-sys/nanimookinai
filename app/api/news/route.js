@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic'
-
+export const revalidate = 3600
 const RSS_FEEDS = [
   'https://www3.nhk.or.jp/rss/news/cat0.xml',   // 主要
   'https://www3.nhk.or.jp/rss/news/cat7.xml',   // 暮らし
