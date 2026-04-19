@@ -12,17 +12,21 @@ const FEEDS = [
   { url: 'https://bijutsutecho.com/rss', lang: 'ja', source: '美術手帖' },
 ]
 
-function extractImage(itemXml) {
+function extractImage(rawItemXml) {
+  // CDATAを展開
+  const decoded = rawItemXml.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+
   const patterns = [
-    /media:content[^>]+url="([^"]+\.(jpg|jpeg|png|webp))/i,
-    /media:thumbnail[^>]+url="([^"]+\.(jpg|jpeg|png|webp))/i,
-    /enclosure[^>]+url="([^"]+\.(jpg|jpeg|png|webp))/i,
-    /<img[^>]+src="([^"]+\.(jpg|jpeg|png|webp))/i,
-    /https?:\/\/[^\s"'<>]+\.(jpg|jpeg|png|webp)/i,
+    /media:content[^>]+url="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+    /media:thumbnail[^>]+url="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+    /enclosure[^>]+url="([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+    /<img[^>]+src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/i,
+    /(https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp))(?:\?[^\s"'<>]*)?/i,
   ]
+
   for (const pattern of patterns) {
-    const match = itemXml.match(pattern)
-    if (match) return match[1] ?? match[0]
+    const match = decoded.match(pattern)
+    if (match && match[1]) return match[1]
   }
   return ''
 }
@@ -33,6 +37,18 @@ function extractLink(itemXml) {
   const guidMatch = itemXml.match(/<guid[^>]*>\s*(https?:\/\/[^\s<]+)\s*<\/guid>/)
   if (guidMatch) return guidMatch[1]
   return ''
+}
+
+function extractText(raw) {
+  return raw
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .trim()
 }
 
 async function fetchFeeds() {
@@ -49,10 +65,11 @@ async function fetchFeeds() {
       const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g)
       for (const match of itemMatches) {
         const item = match[1]
-        const title = item.match(/<title[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/)?.[1]?.trim() ?? ''
+        const titleRaw = item.match(/<title[^>]*>([\s\S]*?)<\/title>/)?.[1] ?? ''
+        const title = extractText(titleRaw)
         const link = extractLink(item)
-        const desc = item.match(/<description[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1]
-          ?.replace(/<[^>]+>/g, '').trim().slice(0, 200) ?? ''
+        const descRaw = item.match(/<description[^>]*>([\s\S]*?)<\/description>/)?.[1] ?? ''
+        const desc = extractText(descRaw).slice(0, 200)
         const image = extractImage(item)
         if (title && link) {
           items.push({ title, link, desc, image, source: feed.source, lang: feed.lang })
@@ -76,7 +93,7 @@ export async function GET() {
     const enNews = allNews.filter(n => n.lang === 'en').slice(0, 20)
 
     const jaText = jaNews.map((n, i) => `${i + 1}. [${n.source}] ${n.title}`).join('\n')
-    const enText = enNews.map((n, i) => `${i + 1}. [${n.source}] ${n.title} | ${n.desc?.slice(0, 80)}`).join('\n')
+    const enText = enNews.map((n, i) => `${i + 1}. [${n.source}] ${n.title} | ${n.desc.slice(0, 80)}`).join('\n')
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -95,10 +112,10 @@ export async function GET() {
 
 【必須ルール】
 - スポーツは最大4件まで
-- アート・デザイン・文化（Colossal・Dezeen・美術手帖）は最低4件必ず含める
+- Colossal・Dezeen・美術手帖のアート・デザイン系は最低4件必ず含める
 - 自然・動物・科学・地域の話題を優先
 - 政治・事件・事故・災害・経済悪化・紛争は除外
-- 英語ニュースは日本語に翻訳
+- 英語ニュースは必ず日本語に翻訳する
 
 【日本語ニュース】
 ${jaText}
@@ -106,7 +123,7 @@ ${jaText}
 【英語ニュース】
 ${enText}
 
-URLは必ず元データから正確に使用してください。
+URLは必ず元データから正確にコピーしてください。
 以下のJSON配列のみ返してください：
 [{"id":"1","title":"タイトル","summary":"100文字以内の要約","category":"アート","source":"Colossal","url":"記事のURL","image":"","likes":0}]`
         }],
@@ -120,8 +137,9 @@ URLは必ず元データから正確に使用してください。
     const articles = JSON.parse(jsonMatch[0])
 
     const enriched = articles.map(a => {
-      const original = allNews.find(n => n.link === a.url)
-        ?? allNews.find(n => a.title && n.title && n.title.slice(0, 10) === a.title.slice(0, 10))
+      const byUrl = allNews.find(n => n.link === a.url)
+      const byTitle = allNews.find(n => n.title.slice(0, 10) === a.title.slice(0, 10))
+      const original = byUrl ?? byTitle
       return {
         ...a,
         url: original?.link ?? a.url,
