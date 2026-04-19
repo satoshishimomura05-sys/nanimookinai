@@ -12,6 +12,29 @@ const FEEDS = [
   { url: 'https://bijutsutecho.com/rss', lang: 'ja', source: '美術手帖' },
 ]
 
+function extractImage(itemXml) {
+  const patterns = [
+    /media:content[^>]+url="([^"]+\.(jpg|jpeg|png|webp))/i,
+    /media:thumbnail[^>]+url="([^"]+\.(jpg|jpeg|png|webp))/i,
+    /enclosure[^>]+url="([^"]+\.(jpg|jpeg|png|webp))/i,
+    /<img[^>]+src="([^"]+\.(jpg|jpeg|png|webp))/i,
+    /https?:\/\/[^\s"'<>]+\.(jpg|jpeg|png|webp)/i,
+  ]
+  for (const pattern of patterns) {
+    const match = itemXml.match(pattern)
+    if (match) return match[1] ?? match[0]
+  }
+  return ''
+}
+
+function extractLink(itemXml) {
+  const linkMatch = itemXml.match(/<link>\s*(https?:\/\/[^\s<]+)\s*<\/link>/)
+  if (linkMatch) return linkMatch[1]
+  const guidMatch = itemXml.match(/<guid[^>]*>\s*(https?:\/\/[^\s<]+)\s*<\/guid>/)
+  if (guidMatch) return guidMatch[1]
+  return ''
+}
+
 async function fetchFeeds() {
   const items = []
   for (const feed of FEEDS) {
@@ -27,19 +50,13 @@ async function fetchFeeds() {
       for (const match of itemMatches) {
         const item = match[1]
         const title = item.match(/<title[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/)?.[1]?.trim() ?? ''
-        const link = item.match(/<link>\s*(https?:\/\/[^\s<]+)\s*<\/link>/)?.[1]
-          ?? item.match(/<guid[^>]*>\s*(https?:\/\/[^\s<]+)\s*<\/guid>/)?.[1] ?? ''
+        const link = extractLink(item)
         const desc = item.match(/<description[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1]
           ?.replace(/<[^>]+>/g, '').trim().slice(0, 200) ?? ''
-        const image =
-          item.match(/<media:content[^>]*url="([^"]+)"[^>]*type="image[^"]*"/)?.[1]
-          ?? item.match(/<media:thumbnail[^>]*url="([^"]+)"/)?.[1]
-          ?? item.match(/<media:content[^>]*url="([^"]+)"/)?.[1]
-          ?? item.match(/<enclosure[^>]*type="image[^"]*"[^>]*url="([^"]+)"/)?.[1]
-          ?? item.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="image[^"]*"/)?.[1]
-          ?? item.match(/<img[^>]*src="([^"]+)"/)?.[1]
-          ?? ''
-        if (title && link) items.push({ title, link, desc, image, source: feed.source, lang: feed.lang })
+        const image = extractImage(item)
+        if (title && link) {
+          items.push({ title, link, desc, image, source: feed.source, lang: feed.lang })
+        }
       }
     } catch (e) {
       console.error('Feed error:', feed.url, e.message)
@@ -71,22 +88,27 @@ export async function GET() {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 4000,
-        system: 'You are a JSON API. Return ONLY a valid JSON array. No markdown, no explanation, no extra text before or after the array.',
+        system: 'You are a JSON API. Return ONLY a valid JSON array. No markdown, no explanation, no extra text.',
         messages: [{
           role: 'user',
           content: `以下のニュースから穏やかでポジティブなものを合計20件選んでください。
-日本語12件・英語8件を目安にしてください。
-政治・事件・事故・災害・経済悪化・紛争は除外してください。
-スポーツ・自然・動物・アート・デザイン・ファッション・科学・文化・地域の話題を優先してください。
+
+【必須ルール】
+- スポーツは最大4件まで
+- アート・デザイン・文化（Colossal・Dezeen・美術手帖）は最低4件必ず含める
+- 自然・動物・科学・地域の話題を優先
+- 政治・事件・事故・災害・経済悪化・紛争は除外
+- 英語ニュースは日本語に翻訳
 
 【日本語ニュース】
 ${jaText}
 
-【英語ニュース（日本語に翻訳して使用）】
+【英語ニュース】
 ${enText}
 
-以下のJSON配列のみ返してください。urlとsourceは必ず元データから正確に使用してください：
-[{"id":"1","title":"タイトル（英語は日本語訳）","summary":"100文字以内の要約","category":"アート","source":"Colossal","url":"記事のURL","image":"","likes":0}]`
+URLは必ず元データから正確に使用してください。
+以下のJSON配列のみ返してください：
+[{"id":"1","title":"タイトル","summary":"100文字以内の要約","category":"アート","source":"Colossal","url":"記事のURL","image":"","likes":0}]`
         }],
       }),
     })
@@ -97,9 +119,9 @@ ${enText}
     if (!jsonMatch) throw new Error('JSONが見つかりませんでした: ' + text.slice(0, 100))
     const articles = JSON.parse(jsonMatch[0])
 
-    const enriched = articles.map((a) => {
+    const enriched = articles.map(a => {
       const original = allNews.find(n => n.link === a.url)
-        ?? allNews.find(n => a.title && n.title && n.title.slice(0, 8) === a.title.slice(0, 8))
+        ?? allNews.find(n => a.title && n.title && n.title.slice(0, 10) === a.title.slice(0, 10))
       return {
         ...a,
         url: original?.link ?? a.url,
